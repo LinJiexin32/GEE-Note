@@ -96,3 +96,103 @@ var visualization = {
 };
 ```
 ***
+
+##批量去云
+```js
+function maskL8sr(image) {
+  // Bits 3 and 5 are cloud shadow and cloud, respectively.
+  var cloudShadowBitMask = 1 << 3;
+  var cloudsBitMask = 1 << 5;
+
+  // Get the pixel QA band.
+  var qa = image.select('pixel_qa');
+
+  // Both flags should be set to zero, indicating clear conditions.
+  var mask = qa.bitwiseAnd(cloudShadowBitMask).eq(0)
+      .and(qa.bitwiseAnd(cloudsBitMask).eq(0));
+
+  // Return the masked image.
+  return image.updateMask(mask);
+}
+```
+
+
+###按位左移/右移
+
+1 << 3 
+// 先将1以二进制形式表示，再左移三个比特位，即000001 → 001000
+
+1 << 5
+// 将1以二进制形式表示，再左移五个比特位，即000001 → 100000
+
+(16 >> 3);
+//先将16表示为二进制形式，再右移三个比特位，即10000 → 00010
+
+###bitwiseAnd按位与运算
+
+情况1：
+000000000000 // Image QA   
+000000001000 // cloudShadowBitMask
+000000000000 // 按位与运算的结果为0，所以无云阴影
+
+情况2：
+000000001000 // Image QA 
+000000001000 // cloudShadowBitMask
+000000001000 // 按位与运算的结果，转为十进制等于8，存在云阴影
+
+
+因此
+```js
+var mask = qa.bitwiseAnd(cloudShadowBitMask).eq(0)
+             .and(qa.bitwiseAnd(cloudsBitMask).eq(0));
+```
+表示**QA 中，代表云的比特位和代表云阴影的比特位都为0，** 是“干净”的条件。
+
+
+**示例：选择一张云覆盖量很高的L8影像，对比除云前后的像元值**
+```js
+var dataset = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
+                .filterDate('2021-05-01', '2021-06-01');
+var visualization = {
+  bands: ['SR_B4', 'SR_B3', 'SR_B2'],
+  min: 0.0,
+  max: 0.3,
+};
+
+var img =  dataset.filter(ee.Filter.gt("CLOUD_COVER",40))
+                  .sort("CLOUD_COVER",true)
+                  .first()
+                  
+print(img)
+Map.centerObject(img,10)
+Map.addLayer(img, visualization, 'True Color (432) cloudy');
+
+var cloudBitmask = 1 << 3
+var cloudShadow = 1 << 4
+
+var qa = img.select('QA_PIXEL')
+var mask = qa.bitwiseAnd(cloudBitmask).eq(0)
+             .and(qa.select('QA_PIXEL').bitwiseAnd(cloudShadow).eq(0))
+
+var img_nocloud = img.updateMask(mask);
+Map.addLayer(mask,{min:0,max:1,palette:['FFFFFF', 'CE7E45']},'mask')
+Map.addLayer(img_nocloud, visualization, 'True Color (432)');
+
+```
+
+或者直接
+```js
+  // Bit 0 - Fill
+  // Bit 1 - Dilated Cloud
+  // Bit 2 - Cirrus
+  // Bit 3 - Cloud
+  // Bit 4 - Cloud Shadow
+    var mask = image.select('QA_PIXEL').bitwiseAnd(parseInt('11111', 2)).eq(0);
+```
+**parseInt(string，radix) 是个JavaScript函数，可解析一个字符串，并返回一个整数。**
+string	必需。要被解析的字符串。
+radix	  可选。表示要解析的数字的基数。该值介于2 ~ 36 之间。
+
+parseInt('11111', 2)将‘11111’解析为二进制的11111，即15
+
+**这种写法直接就对0-4五个比特位置做了QA筛选。**
