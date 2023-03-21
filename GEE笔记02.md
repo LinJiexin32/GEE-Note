@@ -1031,7 +1031,58 @@ var dataset2 = dataset.map(lib.L8_ApplyScaleFactors);
 ![公共库路径](./asset/公共库路径.png)
 
 
+###Export
 
+####单张Image导出
+```JavaScript
+Export.image.toDrive({
+    image: image,
+    description: fileName,      //任务描述
+    folder: folder,              //文件夹
+    fileNamePrefix: fileName,    //文件名
+    scale: 250,                   //尺寸
+    region: region,               // 区域
+    maxPixels: 1e13
+  });
+```
+#### ImageCollection导出
+
+**这里是假定每个ImageCollection中的Image都有一个属性‘year’，将year作为文件名导出**
+```javascript
+// 设置导出文件夹的名称
+var folder = 'summerStatsNDVI_folder';
+// 获取待导出的图像集合
+var collection = summerStats
+// 定义一个函数，将图像导出到Google Drive中
+var exportImage = function(image, fileName) {
+  Export.image.toDrive({
+    image: image,
+    description: fileName.getInfo(),
+    folder: folder,
+    fileNamePrefix: fileName.getInfo(),
+    scale: 250,
+    region: region,
+    maxPixels: 1e13
+  });
+};
+
+// 获取图像集合中所有的图像
+var images = collection.toList(collection.size());
+// 对每个图像调用导出函数
+var length = images.length().getInfo()
+
+for (var i = 0; i < length; i++) 
+{
+  var image = ee.Image(images.get(i));
+  // 获取图像的年份属性
+  var year = ee.Number(image.get('year')).toInt();
+  // 定义导出文件名，格式为 "year.tif"
+  var fileName = ee.String(year);
+  // 导出图像
+  exportImage(image, fileName);
+}
+
+```
 
 
 
